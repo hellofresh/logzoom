@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/packetzoom/logzoom/buffer"
-	"github.com/packetzoom/logzoom/input"
+	"github.com/hellofresh/logzoom/buffer"
+	"github.com/hellofresh/logzoom/input"
 )
 
 const (

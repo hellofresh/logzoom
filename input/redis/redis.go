@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/adjust/redismq"
-	"github.com/packetzoom/logzoom/buffer"
-	"github.com/packetzoom/logzoom/input"
+	"github.com/hellofresh/logzoom/buffer"
+	"github.com/hellofresh/logzoom/input"
 	"github.com/paulbellamy/ratecounter"
 	"gopkg.in/yaml.v2"
 )

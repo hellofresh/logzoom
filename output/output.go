@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v2"
 
-	"github.com/packetzoom/logzoom/buffer"
-	"github.com/packetzoom/logzoom/route"
+	"github.com/hellofresh/logzoom/buffer"
+	"github.com/hellofresh/logzoom/route"
 )
 
 type Output interface {
