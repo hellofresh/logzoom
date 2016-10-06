@@ -1,3 +1,11 @@
+## *********************************************************************************************
+
+## THIS FORK ONLY WORKS IF AWS ES SERVICE IS USED AS ES OUTPUT.
+
+## *********************************************************************************************
+
+
+
 # LogZoom - A Lumberjack => Logstash indexer in Go
 
 LogZoom is a lightweight, Lumberjack-compliant log indexer based off the fine
