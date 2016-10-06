@@ -16,9 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
-	"github.com/packetzoom/logzoom/buffer"
-	"github.com/packetzoom/logzoom/output"
-	"github.com/packetzoom/logzoom/route"
+	"github.com/hellofresh/logzoom/buffer"
+	"github.com/hellofresh/logzoom/output"
+	"github.com/hellofresh/logzoom/route"
 
 	"github.com/jehiah/go-strftime"
 	"github.com/paulbellamy/ratecounter"
