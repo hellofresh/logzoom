@@ -7,10 +7,10 @@ import (
 	"sync"
 	"syscall"
 	"gopkg.in/yaml.v2"
-	"github.com/packetzoom/logzoom/buffer"
-	"github.com/packetzoom/logzoom/input"
-	"github.com/packetzoom/logzoom/output"
-	"github.com/packetzoom/logzoom/route"
+	"github.com/hellofresh/logzoom/buffer"
+	"github.com/hellofresh/logzoom/input"
+	"github.com/hellofresh/logzoom/output"
+	"github.com/hellofresh/logzoom/route"
 )
 
 type Server struct {

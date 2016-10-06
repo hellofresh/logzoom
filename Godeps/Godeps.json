@@ -1,7 +1,7 @@
 {
-	"ImportPath": "github.com/packetzoom/logzoom",
+	"ImportPath": "github.com/hellofresh/logzoom",
 	"GoVersion": "go1.6",
-	"GodepVersion": "v60",
+	"GodepVersion": "v74",
 	"Deps": [
 		{
 			"ImportPath": "github.com/adjust/redismq",
@@ -128,6 +128,16 @@
 			"Rev": "afbd495e5aaea13597b5e14fe514ddeaa4d76fc3"
 		},
 		{
+			"ImportPath": "github.com/hellofresh/elastic",
+			"Comment": "v2.0.26-3-g72bf767",
+			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+		},
+		{
+			"ImportPath": "github.com/hellofresh/elastic/uritemplates",
+			"Comment": "v2.0.26-3-g72bf767",
+			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+		},
+		{
 			"ImportPath": "github.com/jehiah/go-strftime",
 			"Rev": "2efbe75097a505e2789f7e39cb9da067b5be8e3e"
 		},
@@ -138,7 +148,12 @@
 		},
 		{
 			"ImportPath": "github.com/paulbellamy/ratecounter",
+			"Comment": "v0.1.0",
 			"Rev": "5a11f585a31379765c190c033b6ad39956584447"
+		},
+		{
+			"ImportPath": "github.com/smartystreets/go-aws-auth",
+			"Rev": "2043e6d0bb7e4c18464a7bba562acbe482e3cabd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
@@ -147,16 +162,6 @@
 		{
 			"ImportPath": "gopkg.in/bsm/ratelimit.v1",
 			"Rev": "f14ad9c78b155f69b480cfa41cb655259baac260"
-		},
-		{
-			"ImportPath": "gopkg.in/olivere/elastic.v2",
-			"Comment": "v2.0.26",
-			"Rev": "a094e9ef25446294f7f79c48b39f0d004849f696"
-		},
-		{
-			"ImportPath": "gopkg.in/olivere/elastic.v2/uritemplates",
-			"Comment": "v2.0.26",
-			"Rev": "a094e9ef25446294f7f79c48b39f0d004849f696"
 		},
 		{
 			"ImportPath": "gopkg.in/redis.v3",
