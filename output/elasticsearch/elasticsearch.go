@@ -7,13 +7,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/hellofresh/elastic"
 	"github.com/hellofresh/logzoom/buffer"
+	. "github.com/hellofresh/logzoom/debugging"
 	"github.com/hellofresh/logzoom/output"
 	"github.com/hellofresh/logzoom/route"
 	"github.com/paulbellamy/ratecounter"
-	"github.com/hellofresh/elastic"
+	"github.com/peterbourgon/g2s"
 	"gopkg.in/yaml.v2"
 )
 
@@ -54,11 +57,59 @@ type ESServer struct {
 	term   chan bool
 }
 
-func init() {
-	output.Register("elasticsearch", New)
+// metrics publishing
+var statPub *StatsDCntPublisher
+var configuredESHost string
+
+type StatsDCntPublisher struct {
+	Client  *g2s.Statsd
+	enabled bool
+	prefix  string
 }
 
-func New() (output.Output) {
+// Depending on the value of 'addr' - which is taken from the environment variable "STATSD_ADDRESS" - we create
+// a functional or "dummy" instance of StatsDCntPublisher.
+func NewStatsDCntPublisher(proto, addr, prefix string) *StatsDCntPublisher {
+	sdm := StatsDCntPublisher{
+		Client:  nil,
+		enabled: false,
+		prefix:  prefix,
+	}
+	switch addr {
+	case "unset":
+		return &sdm
+	default:
+		statsdClnt, err := g2s.Dial(proto, addr)
+		if err != nil {
+			log.Println("Unable to connect to StatsD at defined address '%s'.\n", addr)
+		}
+		log.Printf("Successfully connected to StatsD at defined address '%s'.\n", addr)
+		sdm.Client = statsdClnt
+		sdm.enabled = true
+	}
+	return &sdm
+}
+
+func (p *StatsDCntPublisher) Cntr(name string, val int) {
+	if p.enabled {
+		p.Client.Counter(1.0, p.prefix+name, val)
+	}
+}
+
+func init() {
+	output.Register("elasticsearch", New)
+
+	// metrics publishing
+	statsDAddrFromEnv := os.Getenv("STATSD_ADDRESS")
+	if statsDAddrFromEnv == "" {
+		statPub = NewStatsDCntPublisher("udp", "unset", "logcollector.")
+	} else {
+		statPub = NewStatsDCntPublisher("udp", statsDAddrFromEnv, "logcollector.")
+	}
+
+}
+
+func New() output.Output {
 	return &ESServer{
 		host: fmt.Sprintf("%s:%d", defaultHost, time.Now().Unix()),
 		term: make(chan bool, 1),
@@ -80,6 +131,41 @@ func indexName(idx string) string {
 	return fmt.Sprintf("%s-%s", idx, time.Now().Format("2006.01.02"))
 }
 
+// Helper function to extract ElasticSearch host for metrics publishing.
+func extractESHostPrfx(esHosts []string) string {
+	fstEsHost := esHosts[0]
+	inpWoSchema := strings.Split(fstEsHost, "//")[1]
+	fqdn := strings.Split(inpWoSchema, ":")[0]
+	return strings.Split(fqdn, ".")[0]
+}
+
+// Helper function to print bulk responses for debugging purposes.
+func printBulkResponse(r *elastic.BulkResponse) {
+	Debug.Printf("------------------------- bulk response ::BEGIN -------------------------")
+	Debug.Printf("blkRsp:\n")
+	Debug.Printf("...  Took: %d\n", r.Took)
+	Debug.Printf("...  Errors: %t\n", r.Errors)
+	Debug.Printf("...  Num of items: %d\n", len(r.Items))
+	Debug.Printf("...  Failed items   : %d\n", len(r.Failed()))
+	Debug.Printf("...  Succeeded items: %d\n", len(r.Succeeded()))
+
+	// explode `Items  []map[string]*BulkResponseItem`
+	for i, elm := range r.Items {
+		Debug.Printf("......  item no %d\n", i)
+		for key, val := range elm {
+			Debug.Printf("......  key: '%s'\n", key)
+			Debug.Printf("......  val: %#v\n", val)
+		}
+	}
+	Debug.Printf("------------------------- bulk response ::END   -------------------------\n\n")
+}
+
+// Send metrics about messages saved in ElasticSearch (total/failed).
+func publishESMsgMetrics(esHost string, total, lost int) {
+	statPub.Cntr(fmt.Sprintf("%s.messages.total", esHost), total)
+	statPub.Cntr(fmt.Sprintf("%s.messages.lost", esHost), lost)
+}
+
 func (i *Indexer) flush() error {
 	numEvents := i.bulkService.NumberOfActions()
 
@@ -89,7 +175,11 @@ func (i *Indexer) flush() error {
 			i.lastDisplayUpdate = time.Now()
 		}
 
-		_, err := i.bulkService.Do()
+		blkRsp, err := i.bulkService.Do()
+		// debug output
+		printBulkResponse(blkRsp)
+		// metrics publishing
+		publishESMsgMetrics(configuredESHost, len(blkRsp.Items), len(blkRsp.Failed()))
 
 		if err != nil {
 			log.Printf("Unable to flush events: %s", err)
@@ -152,6 +242,9 @@ func (e *ESServer) Init(name string, config yaml.MapSlice, b buffer.Sender, rout
 	e.hosts = esConfig.Hosts
 	e.b = b
 
+	// hack to expose ElasticSearch hosts for metrics publishing
+	configuredESHost = extractESHostPrfx(e.hosts)
+
 	return nil
 }
 
@@ -193,7 +286,7 @@ func (es *ESServer) insertIndexTemplate(client *elastic.Client) error {
 }
 
 func (es *ESServer) Start() error {
-	if (es.b == nil) {
+	if es.b == nil {
 		log.Printf("[%s] No Route is specified for this output", es.name)
 		return nil
 	}
