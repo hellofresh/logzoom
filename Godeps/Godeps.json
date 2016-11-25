@@ -152,6 +152,10 @@
 			"Rev": "5a11f585a31379765c190c033b6ad39956584447"
 		},
 		{
+			"ImportPath": "github.com/peterbourgon/g2s",
+			"Rev": "5767a0b2078638d14800683fd0fe425604883f63"
+		},
+		{
 			"ImportPath": "github.com/smartystreets/go-aws-auth",
 			"Rev": "2043e6d0bb7e4c18464a7bba562acbe482e3cabd"
 		},
