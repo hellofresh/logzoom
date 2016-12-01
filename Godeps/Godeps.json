@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/hellofresh/logzoom",
-	"GoVersion": "go1.6",
-	"GodepVersion": "v74",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v75",
 	"Deps": [
 		{
 			"ImportPath": "github.com/adjust/redismq",
@@ -129,13 +129,18 @@
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic",
-			"Comment": "v2.0.26-3-g72bf767",
-			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
+		},
+		{
+			"ImportPath": "github.com/hellofresh/elastic/backoff",
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic/uritemplates",
-			"Comment": "v2.0.26-3-g72bf767",
-			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
 		},
 		{
 			"ImportPath": "github.com/jehiah/go-strftime",
@@ -152,12 +157,16 @@
 			"Rev": "5a11f585a31379765c190c033b6ad39956584447"
 		},
 		{
-			"ImportPath": "github.com/peterbourgon/g2s",
-			"Rev": "5767a0b2078638d14800683fd0fe425604883f63"
-		},
-		{
 			"ImportPath": "github.com/smartystreets/go-aws-auth",
 			"Rev": "2043e6d0bb7e4c18464a7bba562acbe482e3cabd"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "6c89489cafabcbc76df9dbf84ebf07204673fecf"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context/ctxhttp",
+			"Rev": "6c89489cafabcbc76df9dbf84ebf07204673fecf"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",

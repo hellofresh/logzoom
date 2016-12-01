@@ -6,7 +6,10 @@ package elastic
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
+
+	"golang.org/x/net/context"
 
 	"github.com/hellofresh/elastic/uritemplates"
 )
@@ -82,6 +85,11 @@ func (s *IndicesExistsTemplateService) Validate() error {
 
 // Do executes the operation.
 func (s *IndicesExistsTemplateService) Do() (bool, error) {
+	return s.DoC(nil)
+}
+
+// DoC executes the operation.
+func (s *IndicesExistsTemplateService) DoC(ctx context.Context) (bool, error) {
 	// Check pre-conditions
 	if err := s.Validate(); err != nil {
 		return false, err
@@ -94,14 +102,18 @@ func (s *IndicesExistsTemplateService) Do() (bool, error) {
 	}
 
 	// Get HTTP response
-	res, err := s.client.PerformRequest("HEAD", path, params, nil)
+	res, err := s.client.PerformRequestC(ctx, "HEAD", path, params, nil, 404)
 	if err != nil {
 		return false, err
 	}
-	if res.StatusCode == 200 {
+
+	// Return operation response
+	switch res.StatusCode {
+	case http.StatusOK:
 		return true, nil
-	} else if res.StatusCode == 404 {
+	case http.StatusNotFound:
 		return false, nil
+	default:
+		return false, fmt.Errorf("elastic: got HTTP code %d when it should have been either 200 or 404", res.StatusCode)
 	}
-	return false, fmt.Errorf("elastic: got HTTP code %d when it should have been either 200 or 404", res.StatusCode)
 }

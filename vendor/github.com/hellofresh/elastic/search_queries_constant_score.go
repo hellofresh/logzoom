@@ -4,57 +4,56 @@
 
 package elastic
 
-// ConstantScoreQuery wraps a filter or another query and simply returns
+// ConstantScoreQuery is a query that wraps a filter and simply returns
 // a constant score equal to the query boost for every document in the filter.
 //
-// For more details, see
-// https://www.elastic.co/guide/en/elasticsearch/reference/1.7/query-dsl-constant-score-query.html
+// For more details, see:
+// https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-constant-score-query.html
 type ConstantScoreQuery struct {
-	query  Query
-	filter Filter
+	filter Query
 	boost  *float64
 }
 
-// NewConstantScoreQuery creates a new constant score query.
-func NewConstantScoreQuery() ConstantScoreQuery {
-	return ConstantScoreQuery{}
-}
-
-// Query to wrap in this constant score query.
-func (q ConstantScoreQuery) Query(query Query) ConstantScoreQuery {
-	q.query = query
-	q.filter = nil
-	return q
-}
-
-// Filter to wrap in this constant score query.
-func (q ConstantScoreQuery) Filter(filter Filter) ConstantScoreQuery {
-	q.query = nil
-	q.filter = filter
-	return q
+// ConstantScoreQuery creates and initializes a new constant score query.
+func NewConstantScoreQuery(filter Query) *ConstantScoreQuery {
+	return &ConstantScoreQuery{
+		filter: filter,
+	}
 }
 
 // Boost sets the boost for this query. Documents matching this query
 // will (in addition to the normal weightings) have their score multiplied
 // by the boost provided.
-func (q ConstantScoreQuery) Boost(boost float64) ConstantScoreQuery {
+func (q *ConstantScoreQuery) Boost(boost float64) *ConstantScoreQuery {
 	q.boost = &boost
 	return q
 }
 
-// Source returns JSON for the function score query.
-func (q ConstantScoreQuery) Source() interface{} {
-	source := make(map[string]interface{})
-	query := make(map[string]interface{})
-	source["constant_score"] = query
+// Source returns the query source.
+func (q *ConstantScoreQuery) Source() (interface{}, error) {
+	// "constant_score" : {
+	//     "filter" : {
+	//         ....
+	//     },
+	//     "boost" : 1.5
+	// }
 
-	if q.query != nil {
-		query["query"] = q.query.Source()
-	} else if q.filter != nil {
-		query["filter"] = q.filter.Source()
+	query := make(map[string]interface{})
+
+	params := make(map[string]interface{})
+	query["constant_score"] = params
+
+	// filter
+	src, err := q.filter.Source()
+	if err != nil {
+		return nil, err
 	}
+	params["filter"] = src
+
+	// boost
 	if q.boost != nil {
-		query["boost"] = *q.boost
+		params["boost"] = *q.boost
 	}
-	return source
+
+	return query, nil
 }
