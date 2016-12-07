@@ -327,6 +327,7 @@ func (es *ESServer) Start() error {
 			elastic.SetHttpClient(httpClient),
 			elastic.SetGzip(es.config.GzipEnabled),
 			elastic.SetInfoLog(infoLogger),
+			elastic.SetHealthcheck(false),
 			elastic.SetErrorLog(errorLogger))
 
 		if err != nil {
