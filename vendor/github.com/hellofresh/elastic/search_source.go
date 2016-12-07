@@ -12,22 +12,20 @@ import (
 // It resembles the SearchSourceBuilder in Elasticsearch.
 type SearchSource struct {
 	query                    Query
-	postFilter               Filter
+	postQuery                Query
 	from                     int
 	size                     int
 	explain                  *bool
 	version                  *bool
-	sorts                    []SortInfo
 	sorters                  []Sorter
 	trackScores              bool
 	minScore                 *float64
 	timeout                  string
+	terminateAfter           *int
 	fieldNames               []string
 	fieldDataFields          []string
 	scriptFields             []*ScriptField
-	partialFields            []*PartialField
 	fetchSourceContext       *FetchSourceContext
-	facets                   map[string]Facet
 	aggregations             map[string]Aggregation
 	highlight                *Highlight
 	globalSuggestText        string
@@ -45,12 +43,9 @@ func NewSearchSource() *SearchSource {
 		from:            -1,
 		size:            -1,
 		trackScores:     false,
-		sorts:           make([]SortInfo, 0),
 		sorters:         make([]Sorter, 0),
 		fieldDataFields: make([]string, 0),
 		scriptFields:    make([]*ScriptField, 0),
-		partialFields:   make([]*PartialField, 0),
-		facets:          make(map[string]Facet),
 		aggregations:    make(map[string]Aggregation),
 		rescores:        make([]*Rescore, 0),
 		indexBoosts:     make(map[string]float64),
@@ -68,8 +63,8 @@ func (s *SearchSource) Query(query Query) *SearchSource {
 // PostFilter will be executed after the query has been executed and
 // only affects the search hits, not the aggregations.
 // This filter is always executed as the last filtering mechanism.
-func (s *SearchSource) PostFilter(postFilter Filter) *SearchSource {
-	s.postFilter = postFilter
+func (s *SearchSource) PostFilter(postFilter Query) *SearchSource {
+	s.postQuery = postFilter
 	return s
 }
 
@@ -118,15 +113,22 @@ func (s *SearchSource) TimeoutInMillis(timeoutInMillis int) *SearchSource {
 	return s
 }
 
+// TerminateAfter allows the request to stop after the given number
+// of search hits are collected.
+func (s *SearchSource) TerminateAfter(terminateAfter int) *SearchSource {
+	s.terminateAfter = &terminateAfter
+	return s
+}
+
 // Sort adds a sort order.
 func (s *SearchSource) Sort(field string, ascending bool) *SearchSource {
-	s.sorts = append(s.sorts, SortInfo{Field: field, Ascending: ascending})
+	s.sorters = append(s.sorters, SortInfo{Field: field, Ascending: ascending})
 	return s
 }
 
 // SortWithInfo adds a sort order.
 func (s *SearchSource) SortWithInfo(info SortInfo) *SearchSource {
-	s.sorts = append(s.sorts, info)
+	s.sorters = append(s.sorters, info)
 	return s
 }
 
@@ -137,19 +139,13 @@ func (s *SearchSource) SortBy(sorter ...Sorter) *SearchSource {
 }
 
 func (s *SearchSource) hasSort() bool {
-	return len(s.sorts) > 0 || len(s.sorters) > 0
+	return len(s.sorters) > 0
 }
 
 // TrackScores is applied when sorting and controls if scores will be
 // tracked as well. Defaults to false.
 func (s *SearchSource) TrackScores(trackScores bool) *SearchSource {
 	s.trackScores = trackScores
-	return s
-}
-
-// Facet adds a facet to perform as part of the search.
-func (s *SearchSource) Facet(name string, facet Facet) *SearchSource {
-	s.facets[name] = facet
 	return s
 }
 
@@ -193,14 +189,14 @@ func (s *SearchSource) Suggester(suggester Suggester) *SearchSource {
 	return s
 }
 
-// AddRescorer adds a rescorer to the search.
-func (s *SearchSource) AddRescore(rescore *Rescore) *SearchSource {
+// Rescorer adds a rescorer to the search.
+func (s *SearchSource) Rescorer(rescore *Rescore) *SearchSource {
 	s.rescores = append(s.rescores, rescore)
 	return s
 }
 
 // ClearRescorers removes all rescorers from the search.
-func (s *SearchSource) ClearRescores() *SearchSource {
+func (s *SearchSource) ClearRescorers() *SearchSource {
 	s.rescores = make([]*Rescore, 0)
 	return s
 }
@@ -222,13 +218,10 @@ func (s *SearchSource) FetchSourceContext(fetchSourceContext *FetchSourceContext
 	return s
 }
 
-// Fields	sets the fields to load and return as part of the search request.
-// If none are specified, the source of the document will be returned.
-func (s *SearchSource) Fields(fieldNames ...string) *SearchSource {
-	if s.fieldNames == nil {
-		s.fieldNames = make([]string, 0)
-	}
-	s.fieldNames = append(s.fieldNames, fieldNames...)
+// NoFields indicates that no fields should be loaded, resulting in only
+// id and type to be returned per field.
+func (s *SearchSource) NoFields() *SearchSource {
+	s.fieldNames = make([]string, 0)
 	return s
 }
 
@@ -243,17 +236,13 @@ func (s *SearchSource) Field(fieldName string) *SearchSource {
 	return s
 }
 
-// NoFields indicates that no fields should be loaded, resulting in only
-// id and type to be returned per field.
-func (s *SearchSource) NoFields() *SearchSource {
-	s.fieldNames = make([]string, 0)
-	return s
-}
-
-// FieldDataFields adds one or more fields to load from the field data cache
-// and return as part of the search request.
-func (s *SearchSource) FieldDataFields(fieldDataFields ...string) *SearchSource {
-	s.fieldDataFields = append(s.fieldDataFields, fieldDataFields...)
+// Fields	sets the fields to load and return as part of the search request.
+// If none are specified, the source of the document will be returned.
+func (s *SearchSource) Fields(fieldNames ...string) *SearchSource {
+	if s.fieldNames == nil {
+		s.fieldNames = make([]string, 0)
+	}
+	s.fieldNames = append(s.fieldNames, fieldNames...)
 	return s
 }
 
@@ -264,9 +253,10 @@ func (s *SearchSource) FieldDataField(fieldDataField string) *SearchSource {
 	return s
 }
 
-// ScriptFields adds one or more script fields with the provided scripts.
-func (s *SearchSource) ScriptFields(scriptFields ...*ScriptField) *SearchSource {
-	s.scriptFields = append(s.scriptFields, scriptFields...)
+// FieldDataFields adds one or more fields to load from the field data cache
+// and return as part of the search request.
+func (s *SearchSource) FieldDataFields(fieldDataFields ...string) *SearchSource {
+	s.fieldDataFields = append(s.fieldDataFields, fieldDataFields...)
 	return s
 }
 
@@ -276,15 +266,9 @@ func (s *SearchSource) ScriptField(scriptField *ScriptField) *SearchSource {
 	return s
 }
 
-// PartialFields adds partial fields.
-func (s *SearchSource) PartialFields(partialFields ...*PartialField) *SearchSource {
-	s.partialFields = append(s.partialFields, partialFields...)
-	return s
-}
-
-// PartialField adds a partial field.
-func (s *SearchSource) PartialField(partialField *PartialField) *SearchSource {
-	s.partialFields = append(s.partialFields, partialField)
+// ScriptFields adds one or more script fields with the provided scripts.
+func (s *SearchSource) ScriptFields(scriptFields ...*ScriptField) *SearchSource {
+	s.scriptFields = append(s.scriptFields, scriptFields...)
 	return s
 }
 
@@ -308,7 +292,7 @@ func (s *SearchSource) InnerHit(name string, innerHit *InnerHit) *SearchSource {
 }
 
 // Source returns the serializable JSON for the source builder.
-func (s *SearchSource) Source() interface{} {
+func (s *SearchSource) Source() (interface{}, error) {
 	source := make(map[string]interface{})
 
 	if s.from != -1 {
@@ -320,11 +304,22 @@ func (s *SearchSource) Source() interface{} {
 	if s.timeout != "" {
 		source["timeout"] = s.timeout
 	}
-	if s.query != nil {
-		source["query"] = s.query.Source()
+	if s.terminateAfter != nil {
+		source["terminate_after"] = *s.terminateAfter
 	}
-	if s.postFilter != nil {
-		source["post_filter"] = s.postFilter.Source()
+	if s.query != nil {
+		src, err := s.query.Source()
+		if err != nil {
+			return nil, err
+		}
+		source["query"] = src
+	}
+	if s.postQuery != nil {
+		src, err := s.postQuery.Source()
+		if err != nil {
+			return nil, err
+		}
+		source["post_filter"] = src
 	}
 	if s.minScore != nil {
 		source["min_score"] = *s.minScore
@@ -336,7 +331,11 @@ func (s *SearchSource) Source() interface{} {
 		source["explain"] = *s.explain
 	}
 	if s.fetchSourceContext != nil {
-		source["_source"] = s.fetchSourceContext.Source()
+		src, err := s.fetchSourceContext.Source()
+		if err != nil {
+			return nil, err
+		}
+		source["_source"] = src
 	}
 
 	if s.fieldNames != nil {
@@ -352,32 +351,26 @@ func (s *SearchSource) Source() interface{} {
 		source["fielddata_fields"] = s.fieldDataFields
 	}
 
-	if len(s.partialFields) > 0 {
-		pfmap := make(map[string]interface{})
-		for _, partialField := range s.partialFields {
-			pfmap[partialField.Name] = partialField.Source()
-		}
-		source["partial_fields"] = pfmap
-	}
-
 	if len(s.scriptFields) > 0 {
 		sfmap := make(map[string]interface{})
 		for _, scriptField := range s.scriptFields {
-			sfmap[scriptField.FieldName] = scriptField.Source()
+			src, err := scriptField.Source()
+			if err != nil {
+				return nil, err
+			}
+			sfmap[scriptField.FieldName] = src
 		}
 		source["script_fields"] = sfmap
 	}
 
 	if len(s.sorters) > 0 {
-		sortarr := make([]interface{}, 0)
+		var sortarr []interface{}
 		for _, sorter := range s.sorters {
-			sortarr = append(sortarr, sorter.Source())
-		}
-		source["sort"] = sortarr
-	} else if len(s.sorts) > 0 {
-		sortarr := make([]interface{}, 0)
-		for _, sort := range s.sorts {
-			sortarr = append(sortarr, sort.Source())
+			src, err := sorter.Source()
+			if err != nil {
+				return nil, err
+			}
+			sortarr = append(sortarr, src)
 		}
 		source["sort"] = sortarr
 	}
@@ -390,30 +383,34 @@ func (s *SearchSource) Source() interface{} {
 		source["indices_boost"] = s.indexBoosts
 	}
 
-	if len(s.facets) > 0 {
-		facetsMap := make(map[string]interface{})
-		for field, facet := range s.facets {
-			facetsMap[field] = facet.Source()
-		}
-		source["facets"] = facetsMap
-	}
-
 	if len(s.aggregations) > 0 {
 		aggsMap := make(map[string]interface{})
 		for name, aggregate := range s.aggregations {
-			aggsMap[name] = aggregate.Source()
+			src, err := aggregate.Source()
+			if err != nil {
+				return nil, err
+			}
+			aggsMap[name] = src
 		}
 		source["aggregations"] = aggsMap
 	}
 
 	if s.highlight != nil {
-		source["highlight"] = s.highlight.Source()
+		src, err := s.highlight.Source()
+		if err != nil {
+			return nil, err
+		}
+		source["highlight"] = src
 	}
 
 	if len(s.suggesters) > 0 {
 		suggesters := make(map[string]interface{})
 		for _, s := range s.suggesters {
-			suggesters[s.Name()] = s.Source(false)
+			src, err := s.Source(false)
+			if err != nil {
+				return nil, err
+			}
+			suggesters[s.Name()] = src
 		}
 		if s.globalSuggestText != "" {
 			suggesters["text"] = s.globalSuggestText
@@ -423,7 +420,7 @@ func (s *SearchSource) Source() interface{} {
 
 	if len(s.rescores) > 0 {
 		// Strip empty rescores from request
-		rescores := make([]*Rescore, 0)
+		var rescores []*Rescore
 		for _, r := range s.rescores {
 			if !r.IsEmpty() {
 				rescores = append(rescores, r)
@@ -432,12 +429,20 @@ func (s *SearchSource) Source() interface{} {
 
 		if len(rescores) == 1 {
 			rescores[0].defaultRescoreWindowSize = s.defaultRescoreWindowSize
-			source["rescore"] = rescores[0].Source()
+			src, err := rescores[0].Source()
+			if err != nil {
+				return nil, err
+			}
+			source["rescore"] = src
 		} else {
-			slice := make([]interface{}, 0)
+			var slice []interface{}
 			for _, r := range rescores {
 				r.defaultRescoreWindowSize = s.defaultRescoreWindowSize
-				slice = append(slice, r.Source())
+				src, err := r.Source()
+				if err != nil {
+					return nil, err
+				}
+				slice = append(slice, src)
 			}
 			source["rescore"] = slice
 		}
@@ -464,14 +469,22 @@ func (s *SearchSource) Source() interface{} {
 		m := make(map[string]interface{})
 		for name, hit := range s.innerHits {
 			if hit.path != "" {
+				src, err := hit.Source()
+				if err != nil {
+					return nil, err
+				}
 				path := make(map[string]interface{})
-				path[hit.path] = hit.Source()
+				path[hit.path] = src
 				m[name] = map[string]interface{}{
 					"path": path,
 				}
 			} else if hit.typ != "" {
+				src, err := hit.Source()
+				if err != nil {
+					return nil, err
+				}
 				typ := make(map[string]interface{})
-				typ[hit.typ] = hit.Source()
+				typ[hit.typ] = src
 				m[name] = map[string]interface{}{
 					"type": typ,
 				}
@@ -482,69 +495,5 @@ func (s *SearchSource) Source() interface{} {
 		source["inner_hits"] = m
 	}
 
-	return source
-}
-
-// -- Script Field --
-
-type ScriptField struct {
-	FieldName string
-
-	script string
-	lang   string
-	params map[string]interface{}
-}
-
-func NewScriptField(fieldName, script, lang string, params map[string]interface{}) *ScriptField {
-	return &ScriptField{fieldName, script, lang, params}
-}
-
-func (f *ScriptField) Source() interface{} {
-	source := make(map[string]interface{})
-	source["script"] = f.script
-	if f.lang != "" {
-		source["lang"] = f.lang
-	}
-	if f.params != nil && len(f.params) > 0 {
-		source["params"] = f.params
-	}
-	return source
-}
-
-// -- Partial Field --
-
-type PartialField struct {
-	Name     string
-	includes []string
-	excludes []string
-}
-
-func NewPartialField(name string, includes, excludes []string) *PartialField {
-	return &PartialField{name, includes, excludes}
-}
-
-func (f *PartialField) Source() interface{} {
-	source := make(map[string]interface{})
-
-	if f.includes != nil {
-		switch len(f.includes) {
-		case 0:
-		case 1:
-			source["include"] = f.includes[0]
-		default:
-			source["include"] = f.includes
-		}
-	}
-
-	if f.excludes != nil {
-		switch len(f.excludes) {
-		case 0:
-		case 1:
-			source["exclude"] = f.excludes[0]
-		default:
-			source["exclude"] = f.excludes
-		}
-	}
-
-	return source
+	return source, nil
 }

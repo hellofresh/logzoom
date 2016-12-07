@@ -7,8 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
+
+	//	"golang.org/x/net/context"
+
+	"strings"
 
 	"github.com/hellofresh/elastic"
 	"github.com/hellofresh/logzoom/buffer"
@@ -20,44 +23,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const (
-	defaultHost        = "127.0.0.1"
-	defaultIndexPrefix = "logstash"
-	esFlushInterval    = 5
-	esMaxConns         = 20
-	esRecvBuffer       = 100
-	esSendBuffer       = 100
-)
-
-type Indexer struct {
-	bulkService       *elastic.BulkService
-	indexPrefix       string
-	indexType         string
-	RateCounter       *ratecounter.RateCounter
-	lastDisplayUpdate time.Time
-}
-
-type Config struct {
-	Hosts           []string `yaml:"hosts"`
-	IndexPrefix     string   `yaml:"index"`
-	IndexType       string   `yaml:"index_type"`
-	Timeout         int      `yaml:"timeout"`
-	GzipEnabled     bool     `yaml:"gzip_enabled"`
-	InfoLogEnabled  bool     `yaml:"info_log_enabled"`
-	ErrorLogEnabled bool     `yaml:"error_log_enabled"`
-}
-
-type ESServer struct {
-	name   string
-	fields map[string]string
-	config Config
-	host   string
-	hosts  []string
-	b      buffer.Sender
-	term   chan bool
-}
-
-// metrics publishing
+// StatsD metrics publishing.
 var statPub *StatsDCntPublisher
 var configuredESHost string
 
@@ -90,45 +56,11 @@ func NewStatsDCntPublisher(proto, addr, prefix string) *StatsDCntPublisher {
 	return &sdm
 }
 
+// Convenience function for metrics publishing.
 func (p *StatsDCntPublisher) Cntr(name string, val int) {
 	if p.enabled {
 		p.Client.Counter(1.0, p.prefix+name, val)
 	}
-}
-
-func init() {
-	output.Register("elasticsearch", New)
-
-	// metrics publishing
-	statsDAddrFromEnv := os.Getenv("STATSD_ADDRESS")
-	if statsDAddrFromEnv == "" {
-		statPub = NewStatsDCntPublisher("udp", "unset", "logcollector.")
-	} else {
-		statPub = NewStatsDCntPublisher("udp", statsDAddrFromEnv, "logcollector.")
-	}
-
-}
-
-func New() output.Output {
-	return &ESServer{
-		host: fmt.Sprintf("%s:%d", defaultHost, time.Now().Unix()),
-		term: make(chan bool, 1),
-	}
-}
-
-// Dummy discard, satisfies io.Writer without importing io or os.
-type DevNull struct{}
-
-func (DevNull) Write(p []byte) (int, error) {
-	return len(p), nil
-}
-
-func indexName(idx string) string {
-	if len(idx) == 0 {
-		idx = defaultIndexPrefix
-	}
-
-	return fmt.Sprintf("%s-%s", idx, time.Now().Format("2006.01.02"))
 }
 
 // Helper function to extract ElasticSearch host for metrics publishing.
@@ -155,40 +87,107 @@ func printBulkResponse(r *elastic.BulkResponse) {
 		for key, val := range elm {
 			Debug.Printf("......  key: '%s'\n", key)
 			Debug.Printf("......  val: %#v\n", val)
+			// Do we have a non-nil elastic.ErrorDetails as part of elastic.BulkResponseItem?
+			errDtls := val.Error
+			if errDtls != nil {
+				Debug.Printf("......  error details:\n")
+				Debug.Printf(".........  CausedBy     : %v", errDtls.CausedBy)
+				Debug.Printf(".........  FailedShards : %v", errDtls.FailedShards)
+				Debug.Printf(".........  Grouped      : %t", errDtls.Grouped)
+				Debug.Printf(".........  Index        : %s", errDtls.Index)
+				Debug.Printf(".........  Phase        : %s", errDtls.Phase)
+				Debug.Printf(".........  Reason       : %s", errDtls.Reason)
+				Debug.Printf(".........  ResourceId   : %s", errDtls.ResourceId)
+				Debug.Printf(".........  ResourceType : %s", errDtls.ResourceType)
+				Debug.Printf(".........  RootCause    : %v", errDtls.RootCause)
+				Debug.Printf(".........  Type         : %s", errDtls.Type)
+			}
 		}
 	}
 	Debug.Printf("------------------------- bulk response ::END   -------------------------\n\n")
 }
 
 // Send metrics about messages saved in ElasticSearch (total/failed).
-func publishESMsgMetrics(esHost string, total, lost int) {
-	statPub.Cntr(fmt.Sprintf("%s.messages.total", esHost), total)
-	statPub.Cntr(fmt.Sprintf("%s.messages.lost", esHost), lost)
-}
-
-func (i *Indexer) flush() error {
-	numEvents := i.bulkService.NumberOfActions()
-
-	if numEvents > 0 {
-		if time.Now().Sub(i.lastDisplayUpdate) >= time.Duration(1*time.Second) {
-			log.Printf("Flushing %d event(s) to Elasticsearch, current rate: %d/s", numEvents, i.RateCounter.Rate())
-			i.lastDisplayUpdate = time.Now()
-		}
-
-		blkRsp, err := i.bulkService.Do()
-		// debug output
-		printBulkResponse(blkRsp)
-		// metrics publishing
-		publishESMsgMetrics(configuredESHost, len(blkRsp.Items), len(blkRsp.Failed()))
-
-		if err != nil {
-			log.Printf("Unable to flush events: %s", err)
-		}
-
-		return err
+func publishESMsgMetrics(esHost string, blkRsp *elastic.BulkResponse) {
+	statPub.Cntr(fmt.Sprintf("%s.messages.succeeded", esHost), len(blkRsp.Succeeded()))
+	// Publish each failed message as it's own error type metric as indicated by ElasticSearch.
+	for _, fItmVal := range blkRsp.Failed() {
+		statPub.Cntr(fmt.Sprintf("%s.messages.failed.%s", esHost, fItmVal.Error.Type), 1)
 	}
 
-	return nil
+}
+
+const (
+	defaultHost        = "127.0.0.1"
+	defaultIndexPrefix = "logstash"
+	esFlushInterval    = 10
+	esRecvBuffer       = 10000
+	esSendBuffer       = 10000
+	esWorker           = 20
+	esBulkLimit        = 10000
+)
+
+type Indexer struct {
+	bulkProcessor     *elastic.BulkProcessor
+	indexPrefix       string
+	indexType         string
+	RateCounter       *ratecounter.RateCounter
+	lastDisplayUpdate time.Time
+}
+
+type Config struct {
+	Hosts           []string `yaml:"hosts"`
+	IndexPrefix     string   `yaml:"index"`
+	IndexType       string   `yaml:"index_type"`
+	Timeout         int      `yaml:"timeout"`
+	GzipEnabled     bool     `yaml:"gzip_enabled"`
+	InfoLogEnabled  bool     `yaml:"info_log_enabled"`
+	ErrorLogEnabled bool     `yaml:"error_log_enabled"`
+}
+
+type ESServer struct {
+	name   string
+	fields map[string]string
+	config Config
+	host   string
+	hosts  []string
+	b      buffer.Sender
+	term   chan bool
+	idx    *Indexer
+}
+
+func init() {
+	output.Register("elasticsearch", New)
+
+	// StatsD metrics publishing.
+	statsDAddrFromEnv := os.Getenv("STATSD_ADDRESS")
+	if statsDAddrFromEnv == "" {
+		statPub = NewStatsDCntPublisher("udp", "unset", "logcollector.")
+	} else {
+		statPub = NewStatsDCntPublisher("udp", statsDAddrFromEnv, "logcollector.")
+	}
+}
+
+func New() output.Output {
+	return &ESServer{
+		host: fmt.Sprintf("%s:%d", defaultHost, time.Now().Unix()),
+		term: make(chan bool, 1),
+	}
+}
+
+// Dummy discard, satisfies io.Writer without importing io or os.
+type DevNull struct{}
+
+func (DevNull) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func indexName(idx string) string {
+	if len(idx) == 0 {
+		idx = defaultIndexPrefix
+	}
+
+	return fmt.Sprintf("%s-%s", idx, time.Now().Format("2006.01.02"))
 }
 
 func (i *Indexer) index(ev *buffer.Event) error {
@@ -197,16 +196,10 @@ func (i *Indexer) index(ev *buffer.Event) error {
 	typ := i.indexType
 
 	request := elastic.NewBulkIndexRequest().Index(idx).Type(typ).Doc(doc)
-	i.bulkService.Add(request)
+	i.bulkProcessor.Add(request)
 	i.RateCounter.Incr(1)
 
-	numEvents := i.bulkService.NumberOfActions()
-
-	if numEvents < esSendBuffer {
-		return nil
-	}
-
-	return i.flush()
+	return nil
 }
 
 func (e *ESServer) ValidateConfig(config *Config) error {
@@ -221,6 +214,9 @@ func (e *ESServer) ValidateConfig(config *Config) error {
 	if len(config.IndexType) == 0 {
 		return errors.New("Missing index type (e.g. logstash)")
 	}
+
+	// Hack to expose ElasticSearch hosts for metrics publishing.
+	configuredESHost = extractESHostPrfx(e.hosts)
 
 	return nil
 }
@@ -242,22 +238,16 @@ func (e *ESServer) Init(name string, config yaml.MapSlice, b buffer.Sender, rout
 	e.hosts = esConfig.Hosts
 	e.b = b
 
-	// hack to expose ElasticSearch hosts for metrics publishing
+	// Hack to expose the ElasticSearch host for metrics publishing.
 	configuredESHost = extractESHostPrfx(e.hosts)
 
 	return nil
 }
 
 func readInputChannel(idx *Indexer, receiveChan chan *buffer.Event) {
-	// Drain the channel only if we have room
-	if idx.bulkService.NumberOfActions() < esSendBuffer {
-		select {
-		case ev := <-receiveChan:
-			idx.index(ev)
-		}
-	} else {
-		log.Printf("Internal Elasticsearch buffer is full, waiting")
-		time.Sleep(1 * time.Second)
+	select {
+	case ev := <-receiveChan:
+		idx.index(ev)
 	}
 }
 
@@ -276,6 +266,7 @@ func (es *ESServer) insertIndexTemplate(client *elastic.Client) error {
 	inserter.Create(true)
 	inserter.BodyJson(template)
 
+	//	response, err := inserter.Do(context.Background())
 	response, err := inserter.Do()
 
 	if response != nil {
@@ -283,6 +274,18 @@ func (es *ESServer) insertIndexTemplate(client *elastic.Client) error {
 	}
 
 	return err
+}
+
+func (es *ESServer) afterCommit(id int64, requests []elastic.BulkableRequest, response *elastic.BulkResponse, err error) {
+	if es.idx.RateCounter.Rate() > 0 {
+		log.Printf("Flushed events to Elasticsearch, current rate: %d/s", es.idx.RateCounter.Rate())
+	}
+	if response != nil {
+		// Display debug output if DEBUG env var is set.
+		printBulkResponse(response)
+		// Publish metrics if STATSD_ADDRESS env var is set.
+		publishESMsgMetrics(configuredESHost, response)
+	}
 }
 
 func (es *ESServer) Start() error {
@@ -339,8 +342,6 @@ func (es *ESServer) Start() error {
 
 	log.Printf("Connected to Elasticsearch")
 
-	service := elastic.NewBulkService(client)
-
 	// Add the client as a subscriber
 	receiveChan := make(chan *buffer.Event, esRecvBuffer)
 	es.b.AddSubscriber(es.host, receiveChan)
@@ -348,27 +349,37 @@ func (es *ESServer) Start() error {
 
 	rateCounter := ratecounter.NewRateCounter(1 * time.Second)
 
-	// Create indexer
-	idx := &Indexer{service, es.config.IndexPrefix, es.config.IndexType, rateCounter, time.Now()}
+	// Create bulk processor
+	bulkProcessor, err := client.BulkProcessor().
+		After(es.afterCommit).                        // Function to call after commit
+		Workers(esWorker).                            // # of workers
+		BulkActions(esBulkLimit).                     // # of queued requests before committed
+		BulkSize(-1).                                 // No limit
+		FlushInterval(esFlushInterval * time.Second). // autocommit every # seconds
+		Stats(true).                                  // gather statistics
+		Do()
 
-	// Loop events and publish to elasticsearch
-	tick := time.NewTicker(time.Duration(esFlushInterval) * time.Second)
+	if err != nil {
+		log.Println(err)
+	}
+
+	idx := &Indexer{bulkProcessor, es.config.IndexPrefix, es.config.IndexType, rateCounter, time.Now()}
+	es.idx = idx
 
 	for {
 		readInputChannel(idx, receiveChan)
 
-		if len(tick.C) > 0 || len(es.term) > 0 {
+		if len(es.term) > 0 {
 			select {
-			case <-tick.C:
-				idx.flush()
 			case <-es.term:
-				tick.Stop()
 				log.Println("Elasticsearch received term signal")
 				break
 			}
 		}
 	}
 
+	log.Println("Shutting down. Flushing existing events.")
+	defer bulkProcessor.Close()
 	return nil
 }
 

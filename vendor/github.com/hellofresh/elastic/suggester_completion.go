@@ -4,6 +4,8 @@
 
 package elastic
 
+import "errors"
+
 // CompletionSuggester is a fast suggester for e.g. type-ahead completion.
 // See http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-suggesters-completion.html
 // for more details.
@@ -19,48 +21,48 @@ type CompletionSuggester struct {
 }
 
 // Creates a new completion suggester.
-func NewCompletionSuggester(name string) CompletionSuggester {
-	return CompletionSuggester{
+func NewCompletionSuggester(name string) *CompletionSuggester {
+	return &CompletionSuggester{
 		name:           name,
 		contextQueries: make([]SuggesterContextQuery, 0),
 	}
 }
 
-func (q CompletionSuggester) Name() string {
+func (q *CompletionSuggester) Name() string {
 	return q.name
 }
 
-func (q CompletionSuggester) Text(text string) CompletionSuggester {
+func (q *CompletionSuggester) Text(text string) *CompletionSuggester {
 	q.text = text
 	return q
 }
 
-func (q CompletionSuggester) Field(field string) CompletionSuggester {
+func (q *CompletionSuggester) Field(field string) *CompletionSuggester {
 	q.field = field
 	return q
 }
 
-func (q CompletionSuggester) Analyzer(analyzer string) CompletionSuggester {
+func (q *CompletionSuggester) Analyzer(analyzer string) *CompletionSuggester {
 	q.analyzer = analyzer
 	return q
 }
 
-func (q CompletionSuggester) Size(size int) CompletionSuggester {
+func (q *CompletionSuggester) Size(size int) *CompletionSuggester {
 	q.size = &size
 	return q
 }
 
-func (q CompletionSuggester) ShardSize(shardSize int) CompletionSuggester {
+func (q *CompletionSuggester) ShardSize(shardSize int) *CompletionSuggester {
 	q.shardSize = &shardSize
 	return q
 }
 
-func (q CompletionSuggester) ContextQuery(query SuggesterContextQuery) CompletionSuggester {
+func (q *CompletionSuggester) ContextQuery(query SuggesterContextQuery) *CompletionSuggester {
 	q.contextQueries = append(q.contextQueries, query)
 	return q
 }
 
-func (q CompletionSuggester) ContextQueries(queries ...SuggesterContextQuery) CompletionSuggester {
+func (q *CompletionSuggester) ContextQueries(queries ...SuggesterContextQuery) *CompletionSuggester {
 	q.contextQueries = append(q.contextQueries, queries...)
 	return q
 }
@@ -74,8 +76,8 @@ type completionSuggesterRequest struct {
 	Completion interface{} `json:"completion"`
 }
 
-// Creates the source for the completion suggester.
-func (q CompletionSuggester) Source(includeName bool) interface{} {
+// Source creates the JSON structure for the completion suggester.
+func (q *CompletionSuggester) Source(includeName bool) (interface{}, error) {
 	cs := &completionSuggesterRequest{}
 
 	if q.text != "" {
@@ -100,22 +102,37 @@ func (q CompletionSuggester) Source(includeName bool) interface{} {
 	switch len(q.contextQueries) {
 	case 0:
 	case 1:
-		suggester["context"] = q.contextQueries[0].Source()
+		src, err := q.contextQueries[0].Source()
+		if err != nil {
+			return nil, err
+		}
+		suggester["context"] = src
 	default:
-		ctxq := make([]interface{}, 0)
+		ctxq := make(map[string]interface{})
 		for _, query := range q.contextQueries {
-			ctxq = append(ctxq, query.Source())
+			src, err := query.Source()
+			if err != nil {
+				return nil, err
+			}
+			// Merge the dictionary into ctxq
+			m, ok := src.(map[string]interface{})
+			if !ok {
+				return nil, errors.New("elastic: context query is not a map")
+			}
+			for k, v := range m {
+				ctxq[k] = v
+			}
 		}
 		suggester["context"] = ctxq
 	}
 
-	// TODO(oe) Add competion-suggester specific parameters here
+	// TODO(oe) Add completion-suggester specific parameters here
 
 	if !includeName {
-		return cs
+		return cs, nil
 	}
 
 	source := make(map[string]interface{})
 	source[q.name] = cs
-	return source
+	return source, nil
 }

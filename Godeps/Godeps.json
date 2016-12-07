@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/hellofresh/logzoom",
-	"GoVersion": "go1.6",
-	"GodepVersion": "v74",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v75",
 	"Deps": [
 		{
 			"ImportPath": "github.com/adjust/redismq",
@@ -123,19 +123,29 @@
 			"Rev": "9ec7da8e4a0ddb21abc7137529e19fdf74f2bd61"
 		},
 		{
+			"ImportPath": "github.com/fatih/color",
+			"Comment": "v1.1.0-4-gbf82308",
+			"Rev": "bf82308e8c8546dc2b945157173eb8a959ae9505"
+		},
+		{
 			"ImportPath": "github.com/go-ini/ini",
 			"Comment": "v1.8.6",
 			"Rev": "afbd495e5aaea13597b5e14fe514ddeaa4d76fc3"
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic",
-			"Comment": "v2.0.26-3-g72bf767",
-			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
+		},
+		{
+			"ImportPath": "github.com/hellofresh/elastic/backoff",
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic/uritemplates",
-			"Comment": "v2.0.26-3-g72bf767",
-			"Rev": "72bf7670b775cd119bd51a0154b31366c21e6a0f"
+			"Comment": "v3.0.55-4-g90f2dae",
+			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
 		},
 		{
 			"ImportPath": "github.com/jehiah/go-strftime",
@@ -145,6 +155,15 @@
 			"ImportPath": "github.com/jmespath/go-jmespath",
 			"Comment": "0.2.2-2-gc01cf91",
 			"Rev": "c01cf91b011868172fdcd9f41838e80c9d716264"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Comment": "v0.0.6-9-gd228849",
+			"Rev": "d228849504861217f796da67fae4f6e347643f15"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-isatty",
+			"Rev": "30a891c33c7cde7b02a981314b4228ec99380cca"
 		},
 		{
 			"ImportPath": "github.com/paulbellamy/ratecounter",
@@ -160,8 +179,20 @@
 			"Rev": "2043e6d0bb7e4c18464a7bba562acbe482e3cabd"
 		},
 		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "6c89489cafabcbc76df9dbf84ebf07204673fecf"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context/ctxhttp",
+			"Rev": "6c89489cafabcbc76df9dbf84ebf07204673fecf"
+		},
+		{
 			"ImportPath": "golang.org/x/net/websocket",
 			"Rev": "6c89489cafabcbc76df9dbf84ebf07204673fecf"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "478fcf54317e52ab69f40bb4c7a1520288d7f7ea"
 		},
 		{
 			"ImportPath": "gopkg.in/bsm/ratelimit.v1",

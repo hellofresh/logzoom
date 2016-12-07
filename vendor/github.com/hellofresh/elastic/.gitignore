@@ -21,9 +21,12 @@ _testmain.go
 
 *.exe
 
+/config/scripts
 /generator
 /cluster-test/cluster-test
 /cluster-test/*.log
 /cluster-test/es-chaos-monkey
 /spec
 /tmp
+/CHANGELOG-3.0.html
+
