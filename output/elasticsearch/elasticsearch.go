@@ -327,7 +327,6 @@ func (es *ESServer) Start() error {
 			elastic.SetHttpClient(httpClient),
 			elastic.SetGzip(es.config.GzipEnabled),
 			elastic.SetInfoLog(infoLogger),
-			elastic.SetHealthcheck(false),
 			elastic.SetErrorLog(errorLogger))
 
 		if err != nil {
@@ -355,7 +354,7 @@ func (es *ESServer) Start() error {
 		After(es.afterCommit).                        // Function to call after commit
 		Workers(esWorker).                            // # of workers
 		BulkActions(esBulkLimit).                     // # of queued requests before committed
-		BulkSize(-1).                                 // No limit
+		BulkSize(7 * 1024 * 1024).                    // Limit Bulk requests to 7 MB (AWS ES request size limit is 10MB)
 		FlushInterval(esFlushInterval * time.Second). // autocommit every # seconds
 		Stats(true).                                  // gather statistics
 		Do()
