@@ -134,18 +134,18 @@
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic",
-			"Comment": "v3.0.55-4-g90f2dae",
-			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
+			"Comment": "v3-aws-auth",
+			"Rev": "ecf44dad0ace9170a5a4825bb41eae97bb041010"
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic/backoff",
-			"Comment": "v3.0.55-4-g90f2dae",
-			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
+			"Comment": "v3-aws-auth",
+			"Rev": "ecf44dad0ace9170a5a4825bb41eae97bb041010"
 		},
 		{
 			"ImportPath": "github.com/hellofresh/elastic/uritemplates",
-			"Comment": "v3.0.55-4-g90f2dae",
-			"Rev": "90f2dae047a577937587eacf02885508bf604e34"
+			"Comment": "v3-aws-auth",
+			"Rev": "ecf44dad0ace9170a5a4825bb41eae97bb041010"
 		},
 		{
 			"ImportPath": "github.com/jehiah/go-strftime",
